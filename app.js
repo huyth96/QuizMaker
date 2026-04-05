@@ -426,7 +426,6 @@
     if (!els.questionStage) return;
 
     [
-      '--question-area-max',
       '--title-base',
       '--title-line',
       '--stage-gap',
@@ -461,19 +460,10 @@
     const totalOptionLength = optionLengths.reduce((sum, value) => sum + value, 0);
     const averageOptionLength = optionLengths.length ? totalOptionLength / optionLengths.length : 0;
 
-    const questionAreaMax = clamp(
-      (compactViewport ? 33 : 28)
-        + promptLength / (compactViewport ? 11 : 13)
-        + hintLength / (compactViewport ? 42 : 58)
-        - optionCount * (compactViewport ? 1.8 : 1.2)
-        - totalOptionLength / (compactViewport ? 180 : 320),
-      compactViewport ? 34 : 26,
-      compactViewport ? 58 : 62
-    );
     const titleBase = clamp(
-      (compactViewport ? 1.82 : 2.75) - promptLength / (compactViewport ? 300 : 260),
-      compactViewport ? 1.16 : 1.72,
-      compactViewport ? 1.82 : 2.75
+      (compactViewport ? 1.82 : 3.1) - promptLength / (compactViewport ? 300 : 320),
+      compactViewport ? 1.16 : 2.1,
+      compactViewport ? 1.82 : 3.1
     );
     const noteSize = clamp(
       (compactViewport ? 0.88 : 1) - hintLength / (compactViewport ? 620 : 860),
@@ -486,12 +476,11 @@
       compactViewport ? 0.96 : 1.06
     );
     const optionMinHeight = clamp(
-      (compactViewport ? 76 : 100) + averageOptionLength * (compactViewport ? 0.45 : 0.35),
-      compactViewport ? 76 : 100,
-      compactViewport ? 140 : 168
+      (compactViewport ? 76 : 88) + averageOptionLength * (compactViewport ? 0.45 : 0.55),
+      compactViewport ? 76 : 88,
+      compactViewport ? 140 : 188
     );
 
-    els.questionStage.style.setProperty('--question-area-max', `${questionAreaMax.toFixed(1)}%`);
     els.questionStage.style.setProperty('--title-base', `${titleBase.toFixed(2)}rem`);
     els.questionStage.style.setProperty('--title-line', promptLength > (compactViewport ? 110 : 180) ? '1.08' : '1');
     els.questionStage.style.setProperty('--note-size', `${noteSize.toFixed(2)}rem`);

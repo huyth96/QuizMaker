@@ -37,7 +37,7 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
-  overflow: hidden;
+  overflow: auto;
   color: var(--text);
   font-family: "Sora", sans-serif;
   background:
@@ -69,10 +69,10 @@ h1 {
 
 .app-shell {
   width: min(1480px, calc(100% - 32px));
-  height: calc(100svh - 32px);
+  min-height: calc(100svh - 32px);
   margin: 16px auto;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
   gap: 16px;
 }
 
@@ -202,9 +202,9 @@ h1 {
 }
 
 .canvas-layout {
-  min-height: 0;
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr) 262px;
+  align-items: start;
   gap: 16px;
 }
 
@@ -278,11 +278,10 @@ h1 {
 }
 
 .question-stage {
-  --stage-pad-y: 24px;
-  --stage-pad-x: 28px;
+  --stage-pad-y: 26px;
+  --stage-pad-x: 30px;
   --stage-gap: 22px;
-  --question-area-max: 42%;
-  --title-base: 2.7rem;
+  --title-base: 2.85rem;
   --title-line: 1;
   --note-size: 1rem;
   --note-line: 1.55;
@@ -290,14 +289,13 @@ h1 {
   --option-gap: 14px;
   --option-card-gap: 16px;
   --option-card-pad: 18px;
-  --option-card-min-height: 104px;
+  --option-card-min-height: 96px;
   --option-text-size: 1.06rem;
   --option-text-line: 1.45;
   --option-key-size: 44px;
   min-width: 0;
-  min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
   gap: var(--stage-gap);
   padding: var(--stage-pad-y) var(--stage-pad-x);
   border-radius: var(--radius-xl);
@@ -352,33 +350,24 @@ h1 {
 
 .question-wrap {
   min-width: 0;
-  min-height: 0;
-  max-width: 960px;
+  max-width: none;
+  padding: 24px 26px;
+  border: 1px solid rgba(21, 34, 52, 0.08);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 249, 252, 0.92)),
+    var(--surface-strong);
+  box-shadow: var(--shadow-sm);
   display: grid;
   align-content: start;
   overflow: visible;
 }
 
 .stage-body {
-  min-height: 0;
   display: grid;
   gap: var(--stage-gap);
   align-content: start;
-  overflow: auto;
-  padding-right: 6px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(111, 127, 150, 0.24) transparent;
-}
-
-.stage-body::-webkit-scrollbar,
-.option-grid::-webkit-scrollbar {
-  width: 8px;
-}
-
-.stage-body::-webkit-scrollbar-thumb,
-.option-grid::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(111, 127, 150, 0.24);
+  overflow: visible;
 }
 
 .question-stage h1 {
@@ -401,11 +390,17 @@ h1 {
 }
 
 .option-grid {
-  min-height: auto;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--option-gap);
   align-content: start;
+  padding: 18px;
+  border: 1px solid rgba(21, 34, 52, 0.08);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 249, 252, 0.92)),
+    var(--surface-strong);
   overflow: visible;
 }
 
