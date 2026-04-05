@@ -2,6 +2,8 @@
   const DEFAULT_JSON = 'VNR202_quiz_sources.json';
   const DEFAULT_QUESTION_COUNT = 20;
   const QUESTION_COUNT_PRESETS = [10, 20, 40, 'all'];
+  const MAX_RAIL_ITEMS = 28;
+  const MAX_QUEUE_ITEMS = 60;
   const LS_SETTINGS = 'quizmaker_focus_canvas_settings_v1';
   const LS_PROGRESS = 'quizmaker_focus_canvas_progress_v1';
 
@@ -75,6 +77,22 @@
   function getResolvedQuestionCount() {
     if (questionCount === 'all') return ALL_ITEMS.length;
     return Math.min(questionCount, ALL_ITEMS.length);
+  }
+
+  function getVisibleRange(total, active, maxItems) {
+    if (total <= maxItems) {
+      return { start: 0, end: total };
+    }
+
+    const half = Math.floor(maxItems / 2);
+    let start = Math.max(0, active - half);
+    let end = Math.min(total, start + maxItems);
+
+    if (end - start < maxItems) {
+      start = Math.max(0, end - maxItems);
+    }
+
+    return { start, end };
   }
 
   function sameSet(left, right) {
@@ -264,10 +282,14 @@
 
   function renderDots() {
     els.railDots.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    const { start, end } = getVisibleRange(SESSION_ITEMS.length, activeIndex, MAX_RAIL_ITEMS);
 
-    SESSION_ITEMS.forEach((question, index) => {
+    SESSION_ITEMS.slice(start, end).forEach((question, offset) => {
+      const index = start + offset;
       const dot = document.createElement('button');
       dot.className = 'rail-dot';
+      dot.title = `Câu ${index + 1}`;
 
       if (index === activeIndex) dot.classList.add('active');
       if (getSelection(question.id).length) dot.classList.add('done');
@@ -278,14 +300,19 @@
         render();
       });
 
-      els.railDots.append(dot);
+      fragment.append(dot);
     });
+
+    els.railDots.append(fragment);
   }
 
   function renderQueue() {
     els.questionQueue.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    const { start, end } = getVisibleRange(SESSION_ITEMS.length, activeIndex, MAX_QUEUE_ITEMS);
 
-    SESSION_ITEMS.forEach((question, index) => {
+    SESSION_ITEMS.slice(start, end).forEach((question, offset) => {
+      const index = start + offset;
       const item = document.createElement('button');
       item.className = 'queue-item';
 
@@ -306,8 +333,10 @@
         render();
       });
 
-      els.questionQueue.append(item);
+      fragment.append(item);
     });
+
+    els.questionQueue.append(fragment);
   }
 
   function handleOptionSelect(question, optionKey) {
