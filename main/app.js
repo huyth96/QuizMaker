@@ -1,379 +1,715 @@
-/* MLN111 – Quiz App (per-question flow upgraded + bulk mode) */
 (() => {
-  const DEFAULT_JSON = 'MLN111_quiz_sources.json'; // đổi nếu cần
-  const LS_SETTINGS = 'mln111_settings_v2';
-  const LS_PROGRESS = 'mln111_progress_v2';
-
-  let DATA = null;            // full dataset
-  let RENDER_ITEMS = [];      // current session items (filtered+randomized)
-  let MODE = 'per';           // 'per' | 'bulk'
-
-  // Per-question flow state
-  const PER_AUTONEXT_MS = 3000;
-  let perIndex = 0;
-  let perTimer = null;
+  const DEFAULT_JSON = 'VNR202_quiz_sources.json';
+  const DEFAULT_QUESTION_COUNT = 20;
+  const QUESTION_COUNT_PRESETS = [10, 20, 40, 'all'];
+  const LS_SETTINGS = 'quizmaker_focus_canvas_settings_v1';
+  const LS_PROGRESS = 'quizmaker_focus_canvas_progress_v1';
 
   const els = {
-    datasetStatus: document.getElementById('datasetStatus'),
-    btnFetchDefault: document.getElementById('btnFetchDefault'),
+    body: document.body,
+    btnReload: document.getElementById('btnReload'),
     fileInput: document.getElementById('fileInput'),
-    chapterSelect: document.getElementById('chapterSelect'),
-    limitInput: document.getElementById('limitInput'),
-    searchInput: document.getElementById('searchInput'),
-    shuffleQuestions: document.getElementById('shuffleQuestions'),
-    shuffleOptions: document.getElementById('shuffleOptions'),
-    btnStart: document.getElementById('btnStart'),
-    btnReset: document.getElementById('btnReset'),
-    modePer: document.getElementById('modePer'),
-    modeBulk: document.getElementById('modeBulk'),
-    metaTotal: document.getElementById('metaTotal'),
-    metaShown: document.getElementById('metaShown'),
-    score: document.getElementById('score'),
-    quiz: document.getElementById('quiz'),
-    btnSubmitAll: document.getElementById('btnSubmitAll'),
-    btnRevealAll: document.getElementById('btnRevealAll'),
-    btnClearReveal: document.getElementById('btnClearReveal'),
-    footerInfo: document.getElementById('footerInfo'),
+    questionStage: document.querySelector('.question-stage'),
+    questionWrap: document.querySelector('.question-wrap'),
+    sessionState: document.getElementById('sessionState'),
+    sessionBar: document.getElementById('sessionBar'),
+    currentIndex: document.getElementById('currentIndex'),
+    totalCount: document.getElementById('totalCount'),
+    railProgressBar: document.getElementById('railProgressBar'),
+    railDots: document.getElementById('railDots'),
+    questionTag: document.getElementById('questionTag'),
+    questionTone: document.getElementById('questionTone'),
+    questionClock: document.getElementById('questionClock'),
+    questionTitle: document.getElementById('questionTitle'),
+    focusNote: document.getElementById('focusNote'),
+    optionGrid: document.getElementById('optionGrid'),
+    questionQueue: document.getElementById('questionQueue'),
+    queueStat: document.getElementById('queueStat'),
+    btnPrev: document.getElementById('btnPrev'),
+    btnNext: document.getElementById('btnNext'),
+    btnShuffle: document.getElementById('btnShuffle'),
+    stageDock: document.querySelector('.stage-dock'),
+    modeButtons: Array.from(document.querySelectorAll('.mode-toggle')),
+    countButtons: Array.from(document.querySelectorAll('.preset-chip')),
   };
 
-  // ===== Utilities =====
-  const clamp = (n,a,b)=>Math.min(Math.max(n,a),b);
-  const shuffle = (arr)=>{ const a=arr.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; };
-  const loadSettings = ()=>{ try { return JSON.parse(localStorage.getItem(LS_SETTINGS)||'{}'); } catch { return {}; } };
-  const saveSettings = (o)=>localStorage.setItem(LS_SETTINGS, JSON.stringify(o||{}));
-  const loadProgress = ()=>{ try { return JSON.parse(localStorage.getItem(LS_PROGRESS)||'{}'); } catch { return {}; } };
-  const saveProgress = (o)=>localStorage.setItem(LS_PROGRESS, JSON.stringify(o||{}));
-  const clearProgress = ()=>localStorage.removeItem(LS_PROGRESS);
-  const setBadge = (el, text, variant='neutral')=>{ el.textContent=text; el.className=`badge ${variant}`; };
-  const sameSet = (a,b)=>{ if(!Array.isArray(a)||!Array.isArray(b)) return false; const sa=new Set(a.map(x=>x.toLowerCase())); const sb=new Set(b.map(x=>x.toLowerCase())); if(sa.size!==sb.size) return false; for(const x of sa) if(!sb.has(x)) return false; return true; };
+  let DATA = null;
+  let ALL_ITEMS = [];
+  let SESSION_ITEMS = [];
+  let activeIndex = 0;
+  let mode = 'focus';
+  let questionCount = DEFAULT_QUESTION_COUNT;
+  let isLoading = true;
+  let loadError = '';
+  let fitFrame = 0;
+  let selections = loadJson(LS_PROGRESS, {});
 
-  // ===== Data loading =====
-  async function fetchDefault(){
-    try{
-      const res = await fetch(DEFAULT_JSON, {cache:'no-store'});
-      if(!res.ok) throw new Error(`HTTP ${res.status}`);
-      DATA = await res.json();
-      postLoad();
-      setBadge(els.datasetStatus, 'Đã tải mặc định', 'ok');
-    }catch(e){
-      console.warn(e);
-      setBadge(els.datasetStatus, 'Không tìm thấy JSON mặc định', 'warn');
+  function pad(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function loadJson(key, fallback) {
+    try {
+      return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+    } catch {
+      return fallback;
     }
   }
-  function readFile(file){
-    const fr = new FileReader();
-    fr.onload = ()=>{
-      try{
-        DATA = JSON.parse(fr.result);
-        postLoad();
-        setBadge(els.datasetStatus, `Đã tải: ${file.name}`, 'ok');
-      }catch(e){
-        console.error(e);
-        setBadge(els.datasetStatus, 'File không hợp lệ', 'err');
-      }
-    };
-    fr.readAsText(file, 'utf-8');
-  }
-  function postLoad(){
-    if(!DATA || !DATA.items) return;
-    const chapters = [...new Set(DATA.items.map(x=>x.chapter_code))].sort();
-    els.chapterSelect.innerHTML = `<option value="__all__">Tất cả chương</option>` + chapters.map(c=>`<option value="${c}">${c}</option>`).join('');
-    els.metaTotal.textContent = DATA.total_questions || DATA.items.length;
-    els.footerInfo.textContent = `Nguồn: ${DEFAULT_JSON} (${DATA.items.length} câu)`;
-    const s = loadSettings();
-    if(s.limit) els.limitInput.value = s.limit;
-    if(s.chapter) els.chapterSelect.value = s.chapter;
-    if(typeof s.shuffleQuestions==='boolean') els.shuffleQuestions.checked = s.shuffleQuestions;
-    if(typeof s.shuffleOptions==='boolean') els.shuffleOptions.checked = s.shuffleOptions;
-    if(s.mode) applyMode(s.mode);
+
+  function saveJson(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
   }
 
-  // ===== Filtering =====
-  function prepareItems(forceShuffle=false){
-    if(!DATA) return [];
-    const chapter = els.chapterSelect.value;
-    const kw = (els.searchInput.value||'').toLowerCase().trim();
-    let items = DATA.items.slice();
-    if(chapter && chapter!=='__all__') items = items.filter(x => (x.chapter_code||'')===chapter);
-    if(kw){
-      items = items.filter(x=>{
-        const t=(x.question||'').toLowerCase();
-        const ops=(x.options||[]).map(o=>o.text.toLowerCase()).join(' ');
-        return t.includes(kw)||ops.includes(kw);
-      });
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+
+  function parseQuestionCount(value) {
+    return value === 'all' ? 'all' : Number(value);
+  }
+
+  function isValidQuestionCount(value) {
+    return QUESTION_COUNT_PRESETS.includes(value);
+  }
+
+  function getResolvedQuestionCount() {
+    if (questionCount === 'all') return ALL_ITEMS.length;
+    return Math.min(questionCount, ALL_ITEMS.length);
+  }
+
+  function sameSet(left, right) {
+    if (!Array.isArray(left) || !Array.isArray(right)) return false;
+    const a = new Set(left.map((value) => String(value).toLowerCase()));
+    const b = new Set(right.map((value) => String(value).toLowerCase()));
+    if (a.size !== b.size) return false;
+    for (const value of a) {
+      if (!b.has(value)) return false;
     }
-    const limit = clamp(parseInt(els.limitInput.value||'0',10)||0, 1, items.length||1);
-    if(forceShuffle || els.shuffleQuestions.checked) items = shuffle(items);
-    items = items.slice(0, limit);
-    if(els.shuffleOptions.checked) items = items.map(it=>({...it, options: shuffle(it.options||[])}));
-    return items;
+    return true;
   }
 
-  function applyMode(mode){
-    MODE = mode;
-    if(MODE==='per'){
-      els.modePer.classList.add('active'); els.modeBulk.classList.remove('active');
-      els.btnSubmitAll.style.display = 'none';
-    }else{
-      els.modeBulk.classList.add('active'); els.modePer.classList.remove('active');
-      els.btnSubmitAll.style.display = 'inline-flex';
+  function shuffle(items) {
+    const copy = items.slice();
+    for (let index = copy.length - 1; index > 0; index -= 1) {
+      const other = Math.floor(Math.random() * (index + 1));
+      [copy[index], copy[other]] = [copy[other], copy[index]];
     }
-    const s = loadSettings(); s.mode = MODE; saveSettings(s);
+    return copy;
   }
 
-  // ===== Rendering helpers (cards) =====
-  function buildCard(q, index, groupName){
-    const card = document.createElement('article'); card.className='q-card'; card.dataset.qid = q.id;
-    const head = document.createElement('div'); head.className='q-head';
+  function getModeLabel() {
+    return {
+      focus: 'Focus',
+      review: 'Review',
+      exam: 'Exam',
+    }[mode];
+  }
 
-    const order = document.createElement('span'); order.className='q-order'; order.textContent = `#${index+1}`;
-    const chap = document.createElement('span'); chap.className='q-chapter badge'; chap.textContent = q.chapter_code || 'Chương?';
-    const ttype = document.createElement('span'); ttype.className='q-type badge'; ttype.textContent = (q.correct_keys && q.correct_keys.length>1) ? 'Multiple' : 'Single';
-    const status = document.createElement('span'); status.className='q-status badge pending'; status.textContent='Chưa làm';
-    head.append(order, chap, ttype, status);
+  function normalizeItems(items) {
+    return (items || []).map((item, index) => {
+      const correctKeys = Array.isArray(item.correct_keys)
+        ? item.correct_keys.map((key) => String(key).toLowerCase())
+        : [];
+      const selectionHint = item.selection_hint || correctKeys.length || 1;
+      const isMultiple = item.type === 'multiple' || selectionHint > 1;
 
-    const text = document.createElement('div'); text.className='q-text'; text.textContent = q.question || '(Không có nội dung câu hỏi)';
-
-    const opsWrap = document.createElement('div'); opsWrap.className='q-options';
-    const isMulti = (q.correct_keys||[]).length>1;
-    (q.options||[]).forEach(op=>{
-      const row = document.createElement('label'); row.className='opt';
-      const input = document.createElement('input'); input.type = isMulti ? 'checkbox' : 'radio'; input.name = groupName; input.value = op.key;
-      const keySpan = document.createElement('span'); keySpan.className='key'; keySpan.textContent = (op.key||'?').toUpperCase();
-      const txtSpan = document.createElement('span'); txtSpan.className='txt'; txtSpan.textContent = op.text || '';
-      row.append(input, keySpan, txtSpan); opsWrap.append(row);
+      return {
+        id: item.id || `item-${index + 1}`,
+        chapter: item.chapter_code || 'Tổng hợp',
+        prompt: item.question || '(Không có nội dung câu hỏi)',
+        options: Array.isArray(item.options)
+          ? item.options.map((option) => ({
+              key: String(option.key || '').toLowerCase(),
+              text: option.text || '',
+            }))
+          : [],
+        correctKeys,
+        selectionHint,
+        isMultiple,
+        answerNote: item.answer_note || '',
+        notes: Array.isArray(item.notes) ? item.notes : [],
+        sourceTags: Array.isArray(item.source_tags) ? item.source_tags : [],
+        unresolvedAnswer: !!item.unresolved_answer,
+      };
     });
-
-    const foot = document.createElement('div'); foot.className='q-foot';
-    const ans = document.createElement('span'); ans.className='ans badge info'; ans.textContent = (q.correct_keys && q.correct_keys.length) ? `Đáp án: ${q.correct_keys.join(', ').toUpperCase()}` : 'Chưa có đáp án';
-    const btnNext = document.createElement('button'); btnNext.className='btn tiny ghost'; btnNext.textContent='Tiếp';
-    btnNext.addEventListener('click', ()=> goNextPer());
-    foot.append(ans, btnNext);
-
-    card.append(head, text, opsWrap, foot);
-    return card;
   }
 
-  function getSelections(card){ return Array.from(card.querySelectorAll('input:checked')).map(x=>x.value); }
+  function getSelection(questionId) {
+    return Array.isArray(selections[questionId])
+      ? selections[questionId].map((value) => String(value).toLowerCase())
+      : [];
+  }
 
-  function gradeCard(card, q, revealCorrect=true){
-    const status = card.querySelector('.q-status');
-    const opts = Array.from(card.querySelectorAll('.opt'));
-    const selected = getSelections(card);
-    opts.forEach(o=>o.classList.remove('correct','wrong'));
-    card.classList.remove('revealed');
+  function saveSelection(questionId, selected) {
+    selections[questionId] = selected.slice();
+    saveJson(LS_PROGRESS, selections);
+  }
 
-    const hasAns = Array.isArray(q.correct_keys) && q.correct_keys.length>0;
-    if(!hasAns){
-      status.className='q-status badge done';
-      status.textContent = selected.length ? 'Đã chọn (chưa có đáp án)' : 'Chưa làm';
-      return {graded:false, ok:false};
+  function saveSettings() {
+    saveJson(LS_SETTINGS, {
+      mode,
+      questionCount,
+      activeIndex,
+      sourceLabel: DATA && DATA.__sourceLabel ? DATA.__sourceLabel : DEFAULT_JSON,
+      sessionIds: SESSION_ITEMS.map((item) => item.id),
+    });
+  }
+
+  function getSelectionLimit(question) {
+    return Math.max(1, question.selectionHint || question.correctKeys.length || 1);
+  }
+
+  function hasAnswer(question) {
+    return Array.isArray(question.correctKeys) && question.correctKeys.length > 0;
+  }
+
+  function shouldReveal(question) {
+    const selected = getSelection(question.id);
+    if (!hasAnswer(question)) return false;
+    if (mode === 'review') return true;
+    if (mode === 'focus') {
+      return question.isMultiple ? selected.length >= getSelectionLimit(question) : selected.length > 0;
     }
-    const ok = sameSet(selected, q.correct_keys);
-    opts.forEach(opt=>{
-      const key = opt.querySelector('input').value;
-      if(selected.includes(key) && !q.correct_keys.includes(key)){ opt.classList.add('wrong'); }
-      if(q.correct_keys.includes(key) && (revealCorrect || selected.includes(key))){ opt.classList.add('correct'); }
-    });
-    card.classList.add('revealed');
-    if(selected.length===0){ status.className='q-status badge pending'; status.textContent='Chưa làm'; }
-    else if(ok){ status.className='q-status badge right'; status.textContent='Đúng'; }
-    else { status.className='q-status badge wrong'; status.textContent='Sai'; }
-    return {graded:true, ok};
+    return false;
   }
 
-  // ===== Score across items (not depending on DOM) =====
-  function computeScore(items){
-    const progress = loadProgress();
-    let correct=0, total=0;
-    items.forEach(q=>{
-      const hasAns = Array.isArray(q.correct_keys)&&q.correct_keys.length>0;
-      if(!hasAns) return;
-      total++;
-      const sel = (progress[q.id] && progress[q.id].selected) ? progress[q.id].selected : [];
-      if(sameSet(sel, q.correct_keys)) correct++;
-    });
-    return {correct, total};
-  }
-  function showScoreMeta(){
-    const {correct,total} = computeScore(RENDER_ITEMS);
-    els.score.textContent = `${correct} / ${total}`;
+  function gradeQuestion(question) {
+    const selected = getSelection(question.id);
+    if (!selected.length) return null;
+    if (!hasAnswer(question)) return 'open';
+    return sameSet(selected, question.correctKeys) ? 'right' : 'wrong';
   }
 
-  // ====== PER-QUESTION FLOW ======
-  function startPerFlow(){
-    // Force random câu hỏi
-    RENDER_ITEMS = prepareItems(true);
-    els.metaShown.textContent = RENDER_ITEMS.length.toString();
-    perIndex = 0;
-    renderPerQuestion();
+  function getQueueStatusLabel(question) {
+    const selected = getSelection(question.id);
+    if (!selected.length) return question.chapter;
+
+    const grade = gradeQuestion(question);
+    if (mode === 'exam') return `${question.chapter} • Đã chọn`;
+    if (grade === 'right') return `${question.chapter} • Đúng`;
+    if (grade === 'wrong') return `${question.chapter} • Sai`;
+    return `${question.chapter} • Đã chọn`;
   }
 
-  function renderPerQuestion(){
-    clearTimeout(perTimer); perTimer=null;
-    els.quiz.innerHTML = '';
+  function getHintText(question) {
+    const selected = getSelection(question.id);
+    const parts = [];
 
-    if(perIndex >= RENDER_ITEMS.length){
-      // Finish screen
-      const {correct,total} = computeScore(RENDER_ITEMS);
-      const wrap = document.createElement('div'); wrap.className='finish-card q-card';
-      wrap.innerHTML = `
-        <h2>Hoàn thành 🎉</h2>
-        <p>Bạn đúng <strong>${correct}</strong> / <strong>${total}</strong> câu có đáp án.</p>
-        <div style="margin-top:12px; display:flex; gap:10px; justify-content:center;">
-          <button class="btn primary" id="btnRedo">Làm lại</button>
-          <button class="btn ghost" id="btnReview">Xem lại (hàng loạt)</button>
-        </div>
-      `;
-      els.quiz.append(wrap);
-      document.getElementById('btnRedo').onclick = ()=>{ clearProgress(); startPerFlow(); showScoreMeta(); };
-      document.getElementById('btnReview').onclick = ()=>{ applyMode('bulk'); renderBulkList(); };
-      showScoreMeta();
+    parts.push(question.isMultiple ? `Chọn ${getSelectionLimit(question)} đáp án.` : 'Chọn 1 đáp án.');
+
+    if (!hasAnswer(question)) {
+      parts.push('Câu này chưa có đáp án chuẩn.');
+    } else if (shouldReveal(question)) {
+      parts.push(`Đáp án: ${question.correctKeys.join(', ').toUpperCase()}.`);
+    } else if (mode === 'exam' && selected.length) {
+      parts.push(`Đã chọn: ${selected.join(', ').toUpperCase()}.`);
+    }
+
+    if (question.answerNote) {
+      parts.push(question.answerNote);
+    } else if (question.notes.length) {
+      parts.push(question.notes[0]);
+    } else if (question.sourceTags.length) {
+      parts.push(question.sourceTags.slice(0, 2).join(' • '));
+    }
+
+    return parts.join(' ');
+  }
+
+  function computeSessionStats() {
+    const answered = SESSION_ITEMS.reduce((count, question) => count + (getSelection(question.id).length ? 1 : 0), 0);
+    const gradable = SESSION_ITEMS.reduce((count, question) => count + (hasAnswer(question) ? 1 : 0), 0);
+    const correct = SESSION_ITEMS.reduce((count, question) => count + (gradeQuestion(question) === 'right' ? 1 : 0), 0);
+    return { answered, gradable, correct };
+  }
+
+  function buildSession(requestedIds = []) {
+    if (!ALL_ITEMS.length) {
+      SESSION_ITEMS = [];
+      activeIndex = 0;
       return;
     }
 
-    const q = RENDER_ITEMS[perIndex];
-    // Header with progress bar 3s (starts only after chọn)
-    const perHead = document.createElement('div'); perHead.className='per-head';
-    perHead.innerHTML = `
-      <div class="lhs">Câu <strong>${perIndex+1}</strong> / ${RENDER_ITEMS.length}</div>
-      <div class="progress"><div class="bar" id="autoBar"></div></div>
-    `;
-    els.quiz.append(perHead);
+    const lookup = new Map(ALL_ITEMS.map((item) => [item.id, item]));
+    const restored = requestedIds
+      .map((id) => lookup.get(id))
+      .filter(Boolean);
 
-    const card = buildCard(q, perIndex, `per-${q.id}`);
-    els.quiz.append(card);
-    showScoreMeta();
+    SESSION_ITEMS = restored.length
+      ? restored
+      : shuffle(ALL_ITEMS).slice(0, getResolvedQuestionCount());
 
-    // Interactions: select => grade => save => countdown 3s => next
-    card.querySelectorAll('input').forEach(input=>{
-      input.addEventListener('change', ()=>{
-        // save selections
-        const progress = loadProgress();
-        const sel = getSelections(card);
-        progress[q.id] = {selected: sel};
-        saveProgress(progress);
-
-        // grade + reveal
-        gradeCard(card, q, true);
-        showScoreMeta();
-
-        // run 3s bar then next
-        const bar = document.getElementById('autoBar');
-        bar.classList.remove('run'); // restart animation if user changes choice
-        // force reflow to replay animation
-        void bar.offsetWidth;
-        bar.classList.add('run');
-
-        clearTimeout(perTimer);
-        perTimer = setTimeout(()=>{ goNextPer(); }, PER_AUTONEXT_MS);
-      }, {once:false});
-    });
+    activeIndex = clamp(activeIndex || 0, 0, Math.max(SESSION_ITEMS.length - 1, 0));
   }
 
-function goNextPer(){
-  clearTimeout(perTimer);
-  perTimer = null;
-  perIndex++;
-  renderPerQuestion();
-  // window.scrollTo({ top: 0, behavior: 'smooth' }); // ❌ bỏ cuộn về đầu
-}
+  function setData(data, sourceLabel) {
+    DATA = {
+      ...data,
+      __sourceLabel: sourceLabel || DEFAULT_JSON,
+    };
+    ALL_ITEMS = normalizeItems(Array.isArray(DATA.items) ? DATA.items : []);
 
+    const settings = loadJson(LS_SETTINGS, {});
+    mode = ['focus', 'review', 'exam'].includes(settings.mode) ? settings.mode : mode;
+    questionCount = isValidQuestionCount(settings.questionCount) ? settings.questionCount : questionCount;
+    activeIndex = Number.isInteger(settings.activeIndex) ? settings.activeIndex : 0;
+    selections = loadJson(LS_PROGRESS, {});
 
-  // ====== BULK LIST (giữ nguyên logic cũ) ======
-  function renderBulkList(){
-    RENDER_ITEMS = prepareItems(els.shuffleQuestions.checked);
-    els.metaShown.textContent = RENDER_ITEMS.length.toString();
-    els.quiz.innerHTML = '';
+    buildSession(Array.isArray(settings.sessionIds) ? settings.sessionIds : []);
+    isLoading = false;
+    loadError = '';
+    saveSettings();
+    render();
+  }
 
-    RENDER_ITEMS.forEach((q, idx)=>{
-      const card = buildCard(q, idx, `q-${q.id}`);
-      els.quiz.append(card);
+  function renderDots() {
+    els.railDots.innerHTML = '';
 
-      // Restore selections
-      const progress = loadProgress();
-      const savedSel = (progress[q.id] && progress[q.id].selected) ? progress[q.id].selected : [];
-      savedSel.forEach(k=>{
-        const input = card.querySelector(`input[value="${k}"]`);
-        if(input) input.checked = true;
+    SESSION_ITEMS.forEach((question, index) => {
+      const dot = document.createElement('button');
+      dot.className = 'rail-dot';
+
+      if (index === activeIndex) dot.classList.add('active');
+      if (getSelection(question.id).length) dot.classList.add('done');
+
+      dot.addEventListener('click', () => {
+        activeIndex = index;
+        saveSettings();
+        render();
       });
 
-      // change events (no auto-next in bulk)
-      card.querySelectorAll('input').forEach(input=>{
-        input.addEventListener('change', ()=>{
-          const curr = loadProgress();
-          const sel = getSelections(card);
-          curr[q.id] = {selected: sel};
-          saveProgress(curr);
-        });
+      els.railDots.append(dot);
+    });
+  }
+
+  function renderQueue() {
+    els.questionQueue.innerHTML = '';
+
+    SESSION_ITEMS.forEach((question, index) => {
+      const item = document.createElement('button');
+      item.className = 'queue-item';
+
+      const grade = gradeQuestion(question);
+      if (index === activeIndex) item.classList.add('active');
+      if (getSelection(question.id).length) item.classList.add('done');
+      if (grade === 'right' && mode !== 'exam') item.classList.add('right');
+      if (grade === 'wrong' && mode !== 'exam') item.classList.add('wrong');
+
+      item.innerHTML = `
+        <strong>${pad(index + 1)}. ${question.prompt}</strong>
+        <span>${getQueueStatusLabel(question)}</span>
+      `;
+
+      item.addEventListener('click', () => {
+        activeIndex = index;
+        saveSettings();
+        render();
       });
-    });
 
-    showScoreMeta();
+      els.questionQueue.append(item);
+    });
   }
 
-  function gradeAllBulk(){
-    const cards = Array.from(els.quiz.querySelectorAll('.q-card'));
-    cards.forEach((card, idx)=>{
-      const q = RENDER_ITEMS[idx];
-      gradeCard(card, q, true);
-    });
-    showScoreMeta();
-    window.scrollTo({top:0, behavior:'smooth'});
-  }
+  function handleOptionSelect(question, optionKey) {
+    const key = String(optionKey).toLowerCase();
+    const current = getSelection(question.id);
 
-  // ===== Events =====
-  els.btnFetchDefault.addEventListener('click', fetchDefault);
-  els.fileInput.addEventListener('change', e=>{
-    const f = e.target.files && e.target.files[0]; if(f) readFile(f);
-  });
+    if (question.isMultiple) {
+      const limit = getSelectionLimit(question);
+      const next = current.includes(key)
+        ? current.filter((value) => value !== key)
+        : current.length < limit
+          ? [...current, key]
+          : current;
 
-  els.modePer.addEventListener('click', ()=>applyMode('per'));
-  els.modeBulk.addEventListener('click', ()=>applyMode('bulk'));
-
-  els.btnStart.addEventListener('click', ()=>{
-    // save settings
-    const s = loadSettings();
-    s.limit = parseInt(els.limitInput.value||'0',10) || 20;
-    s.chapter = els.chapterSelect.value;
-    s.shuffleQuestions = !!els.shuffleQuestions.checked;
-    s.shuffleOptions = !!els.shuffleOptions.checked;
-    saveSettings(s);
-
-    if(MODE==='per'){
-      // Per-mode: luôn random câu hỏi
-      startPerFlow();
-    }else{
-      renderBulkList();
+      saveSelection(question.id, next);
+    } else {
+      saveSelection(question.id, [key]);
     }
-  });
 
-  els.btnReset.addEventListener('click', ()=>{
-    clearProgress(); clearTimeout(perTimer); perTimer=null;
-    if(MODE==='per') startPerFlow(); else renderBulkList();
-  });
+    saveSettings();
+    render();
+  }
 
-  els.btnSubmitAll.addEventListener('click', gradeAllBulk);
-  els.btnRevealAll.addEventListener('click', ()=>{
-    // reveal correct options visually (bulk)
-    els.quiz.querySelectorAll('.q-card').forEach((card, idx)=>{
-      gradeCard(card, RENDER_ITEMS[idx], true);
+  function renderOptions(question) {
+    els.optionGrid.innerHTML = '';
+    const selected = getSelection(question.id);
+    const reveal = shouldReveal(question);
+
+    question.options.forEach((option) => {
+      const card = document.createElement('button');
+      card.className = 'option-card';
+
+      const isActive = selected.includes(option.key);
+      const isCorrect = question.correctKeys.includes(option.key);
+
+      if (isActive) card.classList.add('active');
+      if (isActive && mode === 'exam') card.classList.add('done');
+      if (reveal && isCorrect) card.classList.add('correct');
+      if (reveal && isActive && !isCorrect) card.classList.add('wrong');
+
+      card.innerHTML = `
+        <span class="option-key">${option.key.toUpperCase()}</span>
+        <strong>${option.text}</strong>
+      `;
+
+      card.addEventListener('click', () => handleOptionSelect(question, option.key));
+      els.optionGrid.append(card);
+    });
+  }
+
+  function renderProgress() {
+    const { answered, gradable, correct } = computeSessionStats();
+    const completion = SESSION_ITEMS.length ? Math.round((answered / SESSION_ITEMS.length) * 100) : 0;
+    const stepCompletion = SESSION_ITEMS.length ? Math.round(((activeIndex + 1) / SESSION_ITEMS.length) * 100) : 0;
+
+    els.totalCount.textContent = `/ ${pad(SESSION_ITEMS.length || 0)}`;
+    els.currentIndex.textContent = pad(SESSION_ITEMS.length ? activeIndex + 1 : 0);
+    els.queueStat.textContent = `${answered} / ${SESSION_ITEMS.length}`;
+    els.sessionBar.style.width = `${completion}%`;
+
+    if (window.matchMedia('(max-width: 980px)').matches) {
+      els.railProgressBar.style.width = `${stepCompletion}%`;
+      els.railProgressBar.style.height = '100%';
+    } else {
+      els.railProgressBar.style.height = `${stepCompletion}%`;
+      els.railProgressBar.style.width = '100%';
+    }
+
+    if (isLoading) {
+      els.sessionState.textContent = 'Loading';
+    } else if (loadError) {
+      els.sessionState.textContent = 'No Data';
+    } else if (mode === 'review') {
+      els.sessionState.textContent = `Review • ${correct}/${gradable || SESSION_ITEMS.length}`;
+    } else if (mode === 'exam') {
+      els.sessionState.textContent = `Exam • ${answered}/${SESSION_ITEMS.length}`;
+    } else {
+      els.sessionState.textContent = `Focus • ${answered}/${SESSION_ITEMS.length}`;
+    }
+  }
+
+  function getTextLength(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim().length;
+  }
+
+  function resetStageScale() {
+    if (!els.questionStage) return;
+
+    [
+      '--question-area-size',
+      '--option-area-size',
+      '--title-base',
+      '--title-line',
+      '--stage-gap',
+      '--stage-pad-y',
+      '--stage-pad-x',
+      '--note-size',
+      '--note-line',
+      '--note-gap',
+      '--option-gap',
+      '--option-card-gap',
+      '--option-card-pad',
+      '--option-card-min-height',
+      '--option-text-size',
+      '--option-text-line',
+      '--option-key-size',
+    ].forEach((property) => {
+      els.questionStage.style.removeProperty(property);
+    });
+  }
+
+  function applyStageProfile(question = null) {
+    if (!els.questionStage) return;
+    resetStageScale();
+    if (!question) return;
+
+    const compactViewport = window.matchMedia('(max-width: 980px)').matches;
+    const promptLength = getTextLength(question.prompt);
+    const hintLength = getTextLength(getHintText(question));
+    const optionLengths = question.options.map((option) => getTextLength(option.text));
+    const optionCount = Math.max(question.options.length, 1);
+    const longestOption = optionLengths.length ? Math.max(...optionLengths) : 0;
+    const totalOptionLength = optionLengths.reduce((sum, value) => sum + value, 0);
+    const averageOptionLength = optionLengths.length ? totalOptionLength / optionLengths.length : 0;
+
+    const questionArea = clamp(
+      0.9 + promptLength / (compactViewport ? 120 : 180) + hintLength / (compactViewport ? 260 : 360),
+      compactViewport ? 1.05 : 0.95,
+      compactViewport ? 2.35 : 1.95
+    );
+    const optionArea = clamp(
+      1.05 + optionCount * 0.24 + totalOptionLength / (compactViewport ? 150 : 260) + longestOption / (compactViewport ? 180 : 300),
+      compactViewport ? 1.35 : 1.2,
+      compactViewport ? 4.2 : 3.1
+    );
+    const titleBase = clamp(
+      (compactViewport ? 1.9 : 3.1) - promptLength / (compactViewport ? 260 : 210),
+      compactViewport ? 1.18 : 1.6,
+      compactViewport ? 1.9 : 3.1
+    );
+    const noteSize = clamp(
+      (compactViewport ? 0.88 : 1) - hintLength / (compactViewport ? 620 : 860),
+      compactViewport ? 0.76 : 0.84,
+      compactViewport ? 0.88 : 1
+    );
+    const optionTextSize = clamp(
+      (compactViewport ? 0.96 : 1.06) - longestOption / (compactViewport ? 380 : 560),
+      compactViewport ? 0.8 : 0.88,
+      compactViewport ? 0.96 : 1.06
+    );
+    const optionMinHeight = clamp(
+      (compactViewport ? 76 : 100) + averageOptionLength * (compactViewport ? 0.45 : 0.35),
+      compactViewport ? 76 : 100,
+      compactViewport ? 140 : 168
+    );
+
+    els.questionStage.style.setProperty('--question-area-size', `${questionArea.toFixed(2)}fr`);
+    els.questionStage.style.setProperty('--option-area-size', `${optionArea.toFixed(2)}fr`);
+    els.questionStage.style.setProperty('--title-base', `${titleBase.toFixed(2)}rem`);
+    els.questionStage.style.setProperty('--title-line', promptLength > (compactViewport ? 110 : 180) ? '1.08' : '1');
+    els.questionStage.style.setProperty('--note-size', `${noteSize.toFixed(2)}rem`);
+    els.questionStage.style.setProperty('--note-line', compactViewport ? '1.34' : '1.55');
+    els.questionStage.style.setProperty('--option-text-size', `${optionTextSize.toFixed(2)}rem`);
+    els.questionStage.style.setProperty('--option-card-min-height', `${Math.round(optionMinHeight)}px`);
+  }
+
+  function scheduleStageFit(question) {
+    if (!els.questionStage) return;
+    const nextQuestion = question === undefined ? SESSION_ITEMS[activeIndex] || null : question;
+    if (fitFrame) cancelAnimationFrame(fitFrame);
+    fitFrame = requestAnimationFrame(() => {
+      fitFrame = 0;
+      applyStageProfile(nextQuestion);
+    });
+  }
+
+  function renderEmptyState(title, note) {
+    els.btnPrev.disabled = true;
+    els.btnNext.disabled = true;
+    els.btnShuffle.disabled = true;
+    els.questionTag.textContent = 'QuizMaker';
+    els.questionTone.textContent = 'Waiting';
+    els.questionClock.textContent = '--';
+    els.questionTitle.textContent = title;
+    els.focusNote.textContent = note;
+    els.optionGrid.innerHTML = '';
+    els.questionQueue.innerHTML = '';
+    els.railDots.innerHTML = '';
+    els.queueStat.textContent = '0 / 0';
+    els.currentIndex.textContent = '00';
+    els.totalCount.textContent = '/ 00';
+    els.sessionBar.style.width = '0%';
+    if (window.matchMedia('(max-width: 980px)').matches) {
+      els.railProgressBar.style.width = '0%';
+      els.railProgressBar.style.height = '100%';
+    } else {
+      els.railProgressBar.style.height = '0%';
+      els.railProgressBar.style.width = '100%';
+    }
+    scheduleStageFit(null);
+  }
+
+  function renderQuestion() {
+    if (isLoading) {
+      renderEmptyState('Đang nạp bộ câu hỏi...', 'QuizMaker đang tải dữ liệu thật cho phiên học này.');
+      renderProgress();
+      return;
+    }
+
+    if (loadError || !SESSION_ITEMS.length) {
+      renderEmptyState('Không thể mở bộ câu hỏi.', loadError || 'Không có dữ liệu phù hợp để hiển thị.');
+      renderProgress();
+      return;
+    }
+
+    const question = SESSION_ITEMS[activeIndex];
+    const limit = getSelectionLimit(question);
+    const typeLabel = question.unresolvedAnswer
+      ? 'Open'
+      : question.isMultiple
+        ? 'Multi'
+        : 'Single';
+
+    els.btnPrev.disabled = false;
+    els.btnNext.disabled = false;
+    els.btnShuffle.disabled = false;
+    els.questionTag.textContent = question.chapter;
+    els.questionTone.textContent = typeLabel;
+    els.questionClock.textContent = question.isMultiple ? `${limit} đáp án` : '1 đáp án';
+    els.questionTitle.textContent = question.prompt;
+    els.focusNote.textContent = getHintText(question);
+
+    renderOptions(question);
+    renderQueue();
+    renderDots();
+    renderProgress();
+    scheduleStageFit(question);
+  }
+
+  function render() {
+    els.body.dataset.mode = mode;
+
+    els.modeButtons.forEach((button) => {
+      button.classList.toggle('active', button.dataset.mode === mode);
+    });
+    els.countButtons.forEach((button) => {
+      button.classList.toggle('active', button.dataset.count === String(questionCount));
+    });
+
+    renderQuestion();
+  }
+
+  function nextQuestion() {
+    if (!SESSION_ITEMS.length) return;
+    activeIndex = (activeIndex + 1) % SESSION_ITEMS.length;
+    saveSettings();
+    render();
+  }
+
+  function prevQuestion() {
+    if (!SESSION_ITEMS.length) return;
+    activeIndex = (activeIndex - 1 + SESSION_ITEMS.length) % SESSION_ITEMS.length;
+    saveSettings();
+    render();
+  }
+
+  function shuffleSessionOrder() {
+    if (!SESSION_ITEMS.length) return;
+    const currentId = SESSION_ITEMS[activeIndex].id;
+    SESSION_ITEMS = shuffle(SESSION_ITEMS);
+    activeIndex = Math.max(SESSION_ITEMS.findIndex((question) => question.id === currentId), 0);
+    saveSettings();
+    render();
+  }
+
+  function createNewSession() {
+    if (!ALL_ITEMS.length) return;
+    SESSION_ITEMS = shuffle(ALL_ITEMS).slice(0, getResolvedQuestionCount());
+    activeIndex = 0;
+    saveSettings();
+    render();
+  }
+
+  function handleKeydown(event) {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+    const activeEl = document.activeElement;
+    if (activeEl && /input|textarea|select/i.test(activeEl.tagName)) return;
+
+    const question = SESSION_ITEMS[activeIndex];
+    if (!question) return;
+
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      nextQuestion();
+      return;
+    }
+
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      prevQuestion();
+      return;
+    }
+
+    const option = question.options.find((item) => item.key === event.key.toLowerCase());
+    if (option) {
+      event.preventDefault();
+      handleOptionSelect(question, option.key);
+    }
+  }
+
+  async function fetchDefaultData() {
+    isLoading = true;
+    loadError = '';
+    render();
+
+    try {
+      const response = await fetch(DEFAULT_JSON, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setData(await response.json(), DEFAULT_JSON);
+    } catch (error) {
+      console.error(error);
+      isLoading = false;
+      loadError = 'Không tìm thấy hoặc không đọc được tệp JSON mặc định.';
+      render();
+    }
+  }
+
+  function readFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const rawText = typeof reader.result === 'string' ? reader.result : '';
+
+        if (/\.json$/i.test(file.name)) {
+          setData(JSON.parse(rawText), file.name);
+          return;
+        }
+
+        if (!(window.QuizTextParser && typeof window.QuizTextParser.serializeQuizText === 'function')) {
+          throw new Error('TXT parser unavailable');
+        }
+
+        const serialized = window.QuizTextParser.serializeQuizText(rawText, {
+          sourceFile: file.name,
+          title: file.name.replace(/\.[^.]+$/, ''),
+        });
+        setData(serialized, `${file.name} (serialized)`);
+      } catch (error) {
+        console.error(error);
+        loadError = 'Tệp không hợp lệ hoặc chưa thể xử lý.';
+        isLoading = false;
+        render();
+      }
+    };
+
+    reader.readAsText(file, 'utf-8');
+  }
+
+  els.modeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      mode = button.dataset.mode;
+      saveSettings();
+      render();
     });
   });
-  els.btnClearReveal.addEventListener('click', ()=>{
-    els.quiz.querySelectorAll('.q-card').forEach(card=>{
-      card.classList.remove('revealed');
-      card.querySelectorAll('.opt.correct').forEach(o=>o.classList.remove('correct'));
-      card.querySelectorAll('.opt.wrong').forEach(o=>o.classList.remove('wrong'));
-      const status = card.querySelector('.q-status');
-      status.className='q-status badge pending'; status.textContent='Chưa làm';
+
+  els.countButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextCount = parseQuestionCount(button.dataset.count);
+      if (!isValidQuestionCount(nextCount) || nextCount === questionCount) return;
+      questionCount = nextCount;
+      createNewSession();
     });
   });
 
-  els.searchInput.addEventListener('input', ()=>{
-    if(MODE==='per') startPerFlow(); else renderBulkList();
+  els.btnPrev.addEventListener('click', prevQuestion);
+  els.btnNext.addEventListener('click', nextQuestion);
+  els.btnShuffle.addEventListener('click', shuffleSessionOrder);
+  els.btnReload.addEventListener('click', (event) => {
+    if (!DATA || loadError || event.shiftKey) {
+      els.fileInput.click();
+      return;
+    }
+    createNewSession();
   });
+  els.fileInput.addEventListener('change', (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (file) readFile(file);
+    event.target.value = '';
+  });
+  window.addEventListener('resize', () => {
+    renderProgress();
+    scheduleStageFit();
+  });
+  window.addEventListener('keydown', handleKeydown);
 
-  // Startup
-  fetchDefault();
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      scheduleStageFit();
+    }).catch(() => {});
+  }
+
+  render();
+  fetchDefaultData();
 })();
