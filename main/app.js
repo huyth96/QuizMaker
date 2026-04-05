@@ -426,8 +426,7 @@
     if (!els.questionStage) return;
 
     [
-      '--question-area-size',
-      '--option-area-size',
+      '--question-area-max',
       '--title-base',
       '--title-line',
       '--stage-gap',
@@ -462,20 +461,19 @@
     const totalOptionLength = optionLengths.reduce((sum, value) => sum + value, 0);
     const averageOptionLength = optionLengths.length ? totalOptionLength / optionLengths.length : 0;
 
-    const questionArea = clamp(
-      0.9 + promptLength / (compactViewport ? 120 : 180) + hintLength / (compactViewport ? 260 : 360),
-      compactViewport ? 1.05 : 0.95,
-      compactViewport ? 2.35 : 1.95
-    );
-    const optionArea = clamp(
-      1.05 + optionCount * 0.24 + totalOptionLength / (compactViewport ? 150 : 260) + longestOption / (compactViewport ? 180 : 300),
-      compactViewport ? 1.35 : 1.2,
-      compactViewport ? 4.2 : 3.1
+    const questionAreaMax = clamp(
+      (compactViewport ? 33 : 28)
+        + promptLength / (compactViewport ? 11 : 13)
+        + hintLength / (compactViewport ? 42 : 58)
+        - optionCount * (compactViewport ? 1.8 : 1.2)
+        - totalOptionLength / (compactViewport ? 180 : 320),
+      compactViewport ? 34 : 26,
+      compactViewport ? 58 : 62
     );
     const titleBase = clamp(
-      (compactViewport ? 1.9 : 3.1) - promptLength / (compactViewport ? 260 : 210),
-      compactViewport ? 1.18 : 1.6,
-      compactViewport ? 1.9 : 3.1
+      (compactViewport ? 1.82 : 2.75) - promptLength / (compactViewport ? 300 : 260),
+      compactViewport ? 1.16 : 1.72,
+      compactViewport ? 1.82 : 2.75
     );
     const noteSize = clamp(
       (compactViewport ? 0.88 : 1) - hintLength / (compactViewport ? 620 : 860),
@@ -493,8 +491,7 @@
       compactViewport ? 140 : 168
     );
 
-    els.questionStage.style.setProperty('--question-area-size', `${questionArea.toFixed(2)}fr`);
-    els.questionStage.style.setProperty('--option-area-size', `${optionArea.toFixed(2)}fr`);
+    els.questionStage.style.setProperty('--question-area-max', `${questionAreaMax.toFixed(1)}%`);
     els.questionStage.style.setProperty('--title-base', `${titleBase.toFixed(2)}rem`);
     els.questionStage.style.setProperty('--title-line', promptLength > (compactViewport ? 110 : 180) ? '1.08' : '1');
     els.questionStage.style.setProperty('--note-size', `${noteSize.toFixed(2)}rem`);

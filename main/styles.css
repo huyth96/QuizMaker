@@ -281,9 +281,8 @@ h1 {
   --stage-pad-y: 24px;
   --stage-pad-x: 28px;
   --stage-gap: 22px;
-  --question-area-size: 1.05fr;
-  --option-area-size: 1.35fr;
-  --title-base: 3rem;
+  --question-area-max: 42%;
+  --title-base: 2.7rem;
   --title-line: 1;
   --note-size: 1rem;
   --note-line: 1.55;
@@ -355,6 +354,8 @@ h1 {
   min-width: 0;
   min-height: 0;
   max-width: 960px;
+  max-height: min(var(--question-area-max), 100%);
+  flex: 0 1 auto;
   display: grid;
   align-content: start;
   overflow: auto;
@@ -365,9 +366,9 @@ h1 {
 
 .stage-body {
   min-height: 0;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--stage-gap);
-  grid-template-rows: minmax(0, var(--question-area-size)) minmax(0, var(--option-area-size));
 }
 
 .question-wrap::-webkit-scrollbar,
@@ -402,6 +403,7 @@ h1 {
 
 .option-grid {
   min-height: 0;
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--option-gap);
@@ -748,8 +750,7 @@ body[data-tone="warm"] .queue-item.active {
     --stage-pad-x: 16px;
     --stage-pad-y: 16px;
     --stage-gap: 14px;
-    --question-area-size: 0.95fr;
-    --option-area-size: 1.7fr;
+    --question-area-max: 44%;
     --title-base: 1.8rem;
     --note-size: 0.88rem;
     --note-line: 1.35;
@@ -904,8 +905,7 @@ body[data-tone="warm"] .queue-item.active {
     --stage-pad-x: 12px;
     --stage-pad-y: 12px;
     --stage-gap: 10px;
-    --question-area-size: 0.9fr;
-    --option-area-size: 1.9fr;
+    --question-area-max: 48%;
     --title-base: 1.5rem;
     --note-size: 0.8rem;
     --note-line: 1.3;
