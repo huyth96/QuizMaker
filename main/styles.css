@@ -348,25 +348,38 @@ h1 {
   box-shadow: var(--shadow-sm);
 }
 
-.question-wrap {
+.question-panel,
+.answer-panel {
   min-width: 0;
-  max-width: none;
-  padding: 24px 26px;
   border: 1px solid rgba(21, 34, 52, 0.08);
   border-radius: 28px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 249, 252, 0.92)),
     var(--surface-strong);
   box-shadow: var(--shadow-sm);
+}
+
+.question-panel {
+  padding: 24px 26px;
+}
+
+.answer-panel {
+  padding: 18px;
+}
+
+.question-wrap {
+  min-width: 0;
+  max-width: none;
   display: grid;
   align-content: start;
   overflow: visible;
 }
 
 .stage-body {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--stage-gap);
-  align-content: start;
+  min-height: 0;
   overflow: visible;
 }
 
@@ -395,12 +408,10 @@ h1 {
   grid-template-columns: 1fr;
   gap: var(--option-gap);
   align-content: start;
-  padding: 18px;
-  border: 1px solid rgba(21, 34, 52, 0.08);
-  border-radius: 28px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 249, 252, 0.92)),
-    var(--surface-strong);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   overflow: visible;
 }
 
@@ -759,14 +770,33 @@ body[data-tone="warm"] .queue-item.active {
   .stage-body {
     display: flex;
     flex-direction: column;
+    gap: 10px;
+    min-height: 0;
     overflow: hidden;
     padding-right: 0;
+  }
+
+  .question-panel,
+  .answer-panel {
+    min-height: 0;
+    border-radius: 22px;
+  }
+
+  .question-panel {
+    padding: 14px;
+    flex: 0 1 auto;
+    overflow: hidden;
+  }
+
+  .answer-panel {
+    padding: 12px;
+    flex: 1 1 auto;
+    overflow: hidden;
   }
 
   .question-wrap {
     max-width: none;
     max-height: min(var(--question-area-max), 100%);
-    flex: 0 1 auto;
     overflow: auto;
     padding-right: 6px;
     scrollbar-width: thin;
@@ -846,7 +876,6 @@ body[data-tone="warm"] .queue-item.active {
 
   .option-grid {
     min-height: 0;
-    flex: 1 1 auto;
     grid-template-columns: 1fr;
     gap: 8px;
     overflow: auto;
@@ -924,6 +953,16 @@ body[data-tone="warm"] .queue-item.active {
     --option-key-size: 28px;
     overflow: hidden;
     border-radius: 26px;
+  }
+
+  .question-panel {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .answer-panel {
+    padding: 10px;
+    border-radius: 18px;
   }
 
   .topbar {

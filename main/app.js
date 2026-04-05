@@ -455,15 +455,14 @@
     const promptLength = getTextLength(question.prompt);
     const hintLength = getTextLength(getHintText(question));
     const optionLengths = question.options.map((option) => getTextLength(option.text));
-    const optionCount = Math.max(question.options.length, 1);
     const longestOption = optionLengths.length ? Math.max(...optionLengths) : 0;
     const totalOptionLength = optionLengths.reduce((sum, value) => sum + value, 0);
     const averageOptionLength = optionLengths.length ? totalOptionLength / optionLengths.length : 0;
 
     const titleBase = clamp(
-      (compactViewport ? 1.82 : 3.1) - promptLength / (compactViewport ? 300 : 320),
-      compactViewport ? 1.16 : 2.1,
-      compactViewport ? 1.82 : 3.1
+      (compactViewport ? 1.82 : 2.82) - promptLength / (compactViewport ? 300 : 430),
+      compactViewport ? 1.16 : 1.88,
+      compactViewport ? 1.82 : 2.82
     );
     const noteSize = clamp(
       (compactViewport ? 0.88 : 1) - hintLength / (compactViewport ? 620 : 860),
@@ -471,20 +470,20 @@
       compactViewport ? 0.88 : 1
     );
     const optionTextSize = clamp(
-      (compactViewport ? 0.96 : 1.06) - longestOption / (compactViewport ? 380 : 560),
-      compactViewport ? 0.8 : 0.88,
-      compactViewport ? 0.96 : 1.06
+      (compactViewport ? 0.96 : 1.02) - longestOption / (compactViewport ? 380 : 760),
+      compactViewport ? 0.8 : 0.9,
+      compactViewport ? 0.96 : 1.02
     );
     const optionMinHeight = clamp(
-      (compactViewport ? 76 : 88) + averageOptionLength * (compactViewport ? 0.45 : 0.55),
-      compactViewport ? 76 : 88,
-      compactViewport ? 140 : 188
+      (compactViewport ? 76 : 80) + averageOptionLength * (compactViewport ? 0.45 : 0.42),
+      compactViewport ? 76 : 80,
+      compactViewport ? 140 : 160
     );
 
     els.questionStage.style.setProperty('--title-base', `${titleBase.toFixed(2)}rem`);
-    els.questionStage.style.setProperty('--title-line', promptLength > (compactViewport ? 110 : 180) ? '1.08' : '1');
+    els.questionStage.style.setProperty('--title-line', promptLength > (compactViewport ? 110 : 140) ? '1.08' : '1.04');
     els.questionStage.style.setProperty('--note-size', `${noteSize.toFixed(2)}rem`);
-    els.questionStage.style.setProperty('--note-line', compactViewport ? '1.34' : '1.55');
+    els.questionStage.style.setProperty('--note-line', compactViewport ? '1.34' : '1.48');
     els.questionStage.style.setProperty('--option-text-size', `${optionTextSize.toFixed(2)}rem`);
     els.questionStage.style.setProperty('--option-card-min-height', `${Math.round(optionMinHeight)}px`);
   }
