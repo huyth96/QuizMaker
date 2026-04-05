@@ -354,9 +354,15 @@ h1 {
   min-width: 0;
   min-height: 0;
   max-width: 960px;
-  max-height: min(var(--question-area-max), 100%);
-  flex: 0 1 auto;
   display: grid;
+  align-content: start;
+  overflow: visible;
+}
+
+.stage-body {
+  min-height: 0;
+  display: grid;
+  gap: var(--stage-gap);
   align-content: start;
   overflow: auto;
   padding-right: 6px;
@@ -364,19 +370,12 @@ h1 {
   scrollbar-color: rgba(111, 127, 150, 0.24) transparent;
 }
 
-.stage-body {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--stage-gap);
-}
-
-.question-wrap::-webkit-scrollbar,
+.stage-body::-webkit-scrollbar,
 .option-grid::-webkit-scrollbar {
   width: 8px;
 }
 
-.question-wrap::-webkit-scrollbar-thumb,
+.stage-body::-webkit-scrollbar-thumb,
 .option-grid::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(111, 127, 150, 0.24);
@@ -402,16 +401,12 @@ h1 {
 }
 
 .option-grid {
-  min-height: 0;
-  flex: 1 1 auto;
+  min-height: auto;
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--option-gap);
   align-content: start;
-  overflow: auto;
-  padding-right: 6px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(111, 127, 150, 0.24) transparent;
+  overflow: visible;
 }
 
 .option-card {
@@ -766,8 +761,21 @@ body[data-tone="warm"] .queue-item.active {
     overflow: hidden;
   }
 
+  .stage-body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-right: 0;
+  }
+
   .question-wrap {
     max-width: none;
+    max-height: min(var(--question-area-max), 100%);
+    flex: 0 1 auto;
+    overflow: auto;
+    padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(111, 127, 150, 0.24) transparent;
   }
 
   .flow-rail {
@@ -842,8 +850,14 @@ body[data-tone="warm"] .queue-item.active {
   }
 
   .option-grid {
+    min-height: 0;
+    flex: 1 1 auto;
     grid-template-columns: 1fr;
     gap: 8px;
+    overflow: auto;
+    padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(111, 127, 150, 0.24) transparent;
   }
 
   .option-card {
