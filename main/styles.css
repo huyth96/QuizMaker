@@ -535,7 +535,7 @@ h1 {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 14px;
-  max-height: calc(100svh - 132px);
+  height: clamp(420px, calc(100svh - 132px), 860px);
   overflow: hidden;
   padding: 16px;
   border-radius: 28px;
@@ -566,7 +566,8 @@ h1 {
 .queue-list {
   min-height: 0;
   position: relative;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: grid;
   align-content: start;
   gap: 10px;
@@ -966,6 +967,7 @@ body[data-tone="warm"] .queue-item.active {
   }
 
   .queue-panel {
+    height: auto;
     max-height: none;
     overflow: visible;
     min-height: auto;
