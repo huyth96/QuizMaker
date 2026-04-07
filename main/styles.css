@@ -530,12 +530,14 @@ h1 {
 
 .queue-panel {
   min-height: 0;
-  position: relative;
-  align-self: start;
+  position: sticky;
+  top: 16px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 14px;
-  height: clamp(420px, calc(100svh - 132px), 860px);
+  height: calc(100svh - 48px);
+  max-height: calc(100svh - 48px);
+  min-height: 420px;
   overflow: hidden;
   padding: 16px;
   border-radius: 28px;
@@ -574,6 +576,7 @@ h1 {
   padding-left: 20px;
   padding-right: 6px;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: rgba(111, 127, 150, 0.24) transparent;
 }
@@ -967,6 +970,8 @@ body[data-tone="warm"] .queue-item.active {
   }
 
   .queue-panel {
+    position: relative;
+    top: auto;
     height: auto;
     max-height: none;
     overflow: visible;
