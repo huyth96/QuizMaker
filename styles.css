@@ -312,6 +312,13 @@ h1 {
   gap: 14px;
 }
 
+.stage-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .stage-meta {
   display: flex;
   flex-wrap: wrap;
@@ -346,6 +353,12 @@ h1 {
   font-weight: 700;
   background: rgba(255, 255, 255, 0.8);
   box-shadow: var(--shadow-sm);
+}
+
+.ghost-icon.active {
+  color: var(--accent-strong);
+  border-color: rgba(46, 107, 255, 0.2);
+  background: linear-gradient(135deg, rgba(46, 107, 255, 0.12), rgba(255, 255, 255, 0.86));
 }
 
 .question-panel,

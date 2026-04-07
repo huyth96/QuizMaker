@@ -29,6 +29,7 @@
     queueStat: document.getElementById('queueStat'),
     btnPrev: document.getElementById('btnPrev'),
     btnNext: document.getElementById('btnNext'),
+    btnRestoreOrder: document.getElementById('btnRestoreOrder'),
     btnShuffle: document.getElementById('btnShuffle'),
     stageDock: document.querySelector('.stage-dock'),
     modeButtons: Array.from(document.querySelectorAll('.mode-toggle')),
@@ -38,9 +39,11 @@
   let DATA = null;
   let ALL_ITEMS = [];
   let SESSION_ITEMS = [];
+  let SOURCE_INDEX = new Map();
   let activeIndex = 0;
   let mode = 'focus';
   let questionCount = DEFAULT_QUESTION_COUNT;
+  let sessionOrderMode = 'source';
   let isLoading = true;
   let loadError = '';
   let fitFrame = 0;
@@ -167,10 +170,38 @@
     saveJson(LS_SETTINGS, {
       mode,
       questionCount,
+      sessionOrderMode,
       activeIndex,
       sourceLabel: DATA && DATA.__sourceLabel ? DATA.__sourceLabel : DEFAULT_JSON,
       sessionIds: SESSION_ITEMS.map((item) => item.id),
     });
+  }
+
+  function getDefaultSessionItems() {
+    return ALL_ITEMS.slice(0, getResolvedQuestionCount());
+  }
+
+  function getSourcePosition(questionId) {
+    return SOURCE_INDEX.has(questionId) ? SOURCE_INDEX.get(questionId) : Number.MAX_SAFE_INTEGER;
+  }
+
+  function restoreSourceOrder(items) {
+    return items
+      .slice()
+      .sort((left, right) => getSourcePosition(left.id) - getSourcePosition(right.id));
+  }
+
+  function isSessionInSourceOrder(items = SESSION_ITEMS) {
+    if (items.length < 2) return true;
+
+    let lastPosition = -1;
+    for (const question of items) {
+      const currentPosition = getSourcePosition(question.id);
+      if (currentPosition < lastPosition) return false;
+      lastPosition = currentPosition;
+    }
+
+    return true;
   }
 
   function getSelectionLimit(question) {
@@ -253,9 +284,12 @@
       .map((id) => lookup.get(id))
       .filter(Boolean);
 
-    SESSION_ITEMS = restored.length
+    const resolvedCount = getResolvedQuestionCount();
+    const canRestoreMixed = sessionOrderMode === 'mixed' && restored.length === resolvedCount;
+
+    SESSION_ITEMS = canRestoreMixed
       ? restored
-      : shuffle(ALL_ITEMS).slice(0, getResolvedQuestionCount());
+      : getDefaultSessionItems();
 
     activeIndex = clamp(activeIndex || 0, 0, Math.max(SESSION_ITEMS.length - 1, 0));
   }
@@ -266,10 +300,12 @@
       __sourceLabel: sourceLabel || DEFAULT_JSON,
     };
     ALL_ITEMS = normalizeItems(Array.isArray(DATA.items) ? DATA.items : []);
+    SOURCE_INDEX = new Map(ALL_ITEMS.map((item, index) => [item.id, index]));
 
     const settings = loadJson(LS_SETTINGS, {});
     mode = ['focus', 'review', 'exam'].includes(settings.mode) ? settings.mode : mode;
     questionCount = isValidQuestionCount(settings.questionCount) ? settings.questionCount : questionCount;
+    sessionOrderMode = settings.sessionOrderMode === 'mixed' ? 'mixed' : 'source';
     activeIndex = Number.isInteger(settings.activeIndex) ? settings.activeIndex : 0;
     selections = loadJson(LS_PROGRESS, {});
 
@@ -309,7 +345,11 @@
   function renderQueue() {
     els.questionQueue.innerHTML = '';
     const fragment = document.createDocumentFragment();
-    const { start, end } = getVisibleRange(SESSION_ITEMS.length, activeIndex, MAX_QUEUE_ITEMS);
+    const shouldWindowQueue = questionCount !== 'all' && SESSION_ITEMS.length > MAX_QUEUE_ITEMS;
+    const { start, end } = shouldWindowQueue
+      ? getVisibleRange(SESSION_ITEMS.length, activeIndex, MAX_QUEUE_ITEMS)
+      : { start: 0, end: SESSION_ITEMS.length };
+    let activeItem = null;
 
     SESSION_ITEMS.slice(start, end).forEach((question, offset) => {
       const index = start + offset;
@@ -317,7 +357,10 @@
       item.className = 'queue-item';
 
       const grade = gradeQuestion(question);
-      if (index === activeIndex) item.classList.add('active');
+      if (index === activeIndex) {
+        item.classList.add('active');
+        activeItem = item;
+      }
       if (getSelection(question.id).length) item.classList.add('done');
       if (grade === 'right' && mode !== 'exam') item.classList.add('right');
       if (grade === 'wrong' && mode !== 'exam') item.classList.add('wrong');
@@ -337,6 +380,12 @@
     });
 
     els.questionQueue.append(fragment);
+
+    if (activeItem && questionCount === 'all') {
+      requestAnimationFrame(() => {
+        activeItem.scrollIntoView({ block: 'nearest' });
+      });
+    }
   }
 
   function handleOptionSelect(question, optionKey) {
@@ -501,7 +550,10 @@
   function renderEmptyState(title, note) {
     els.btnPrev.disabled = true;
     els.btnNext.disabled = true;
+    els.btnRestoreOrder.disabled = true;
     els.btnShuffle.disabled = true;
+    els.btnRestoreOrder.classList.remove('active');
+    els.btnShuffle.classList.remove('active');
     els.questionTag.textContent = 'QuizMaker';
     els.questionTone.textContent = 'Waiting';
     els.questionClock.textContent = '--';
@@ -547,7 +599,10 @@
 
     els.btnPrev.disabled = false;
     els.btnNext.disabled = false;
+    els.btnRestoreOrder.disabled = isSessionInSourceOrder();
     els.btnShuffle.disabled = false;
+    els.btnRestoreOrder.classList.toggle('active', !els.btnRestoreOrder.disabled);
+    els.btnShuffle.classList.toggle('active', sessionOrderMode === 'mixed');
     els.questionTag.textContent = question.chapter;
     els.questionTone.textContent = typeLabel;
     els.questionClock.textContent = question.isMultiple ? `${limit} đáp án` : '1 đáp án';
@@ -592,6 +647,17 @@
     if (!SESSION_ITEMS.length) return;
     const currentId = SESSION_ITEMS[activeIndex].id;
     SESSION_ITEMS = shuffle(SESSION_ITEMS);
+    sessionOrderMode = 'mixed';
+    activeIndex = Math.max(SESSION_ITEMS.findIndex((question) => question.id === currentId), 0);
+    saveSettings();
+    render();
+  }
+
+  function restoreSessionOrder() {
+    if (!SESSION_ITEMS.length) return;
+    const currentId = SESSION_ITEMS[activeIndex].id;
+    SESSION_ITEMS = restoreSourceOrder(SESSION_ITEMS);
+    sessionOrderMode = 'source';
     activeIndex = Math.max(SESSION_ITEMS.findIndex((question) => question.id === currentId), 0);
     saveSettings();
     render();
@@ -599,7 +665,8 @@
 
   function createNewSession() {
     if (!ALL_ITEMS.length) return;
-    SESSION_ITEMS = shuffle(ALL_ITEMS).slice(0, getResolvedQuestionCount());
+    SESSION_ITEMS = getDefaultSessionItems();
+    sessionOrderMode = 'source';
     activeIndex = 0;
     saveSettings();
     render();
@@ -699,6 +766,7 @@
 
   els.btnPrev.addEventListener('click', prevQuestion);
   els.btnNext.addEventListener('click', nextQuestion);
+  els.btnRestoreOrder.addEventListener('click', restoreSessionOrder);
   els.btnShuffle.addEventListener('click', shuffleSessionOrder);
   els.btnReload.addEventListener('click', (event) => {
     if (!DATA || loadError || event.shiftKey) {
