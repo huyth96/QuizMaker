@@ -530,6 +530,7 @@ h1 {
 
 .queue-panel {
   min-height: 0;
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 14px;
@@ -561,12 +562,25 @@ h1 {
 
 .queue-list {
   min-height: 0;
+  position: relative;
   overflow: auto;
   display: grid;
   align-content: start;
   gap: 10px;
+  padding-left: 20px;
   scrollbar-width: thin;
   scrollbar-color: rgba(111, 127, 150, 0.24) transparent;
+}
+
+.queue-list::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(46, 107, 255, 0.26), rgba(111, 127, 150, 0.12));
 }
 
 .queue-list::-webkit-scrollbar {
@@ -580,6 +594,7 @@ h1 {
 
 .queue-item {
   min-width: 0;
+  position: relative;
   display: grid;
   gap: 6px;
   width: 100%;
@@ -590,6 +605,19 @@ h1 {
   text-align: left;
   color: var(--text);
   background: rgba(255, 255, 255, 0.78);
+}
+
+.queue-item::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 26px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(111, 127, 150, 0.32);
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.95);
 }
 
 .queue-item strong {
@@ -612,16 +640,36 @@ h1 {
   background: linear-gradient(135deg, rgba(46, 107, 255, 0.1), rgba(255, 255, 255, 0.86));
 }
 
+.queue-item.active::before {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent), #5b92ff);
+}
+
 .queue-item.done {
   border-color: rgba(23, 158, 125, 0.22);
+}
+
+.queue-item.done::before {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--success), #49c4a3);
 }
 
 .queue-item.right {
   border-color: rgba(23, 158, 125, 0.28);
 }
 
+.queue-item.right::before {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--success), #49c4a3);
+}
+
 .queue-item.wrong {
   border-color: rgba(240, 150, 84, 0.3);
+}
+
+.queue-item.wrong::before {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--warm), #f6b06c);
 }
 
 .queue-item.right span {
